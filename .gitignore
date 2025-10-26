@@ -1,0 +1,6 @@
+# Local environment files
+.env
+.env.*
+
+# VS Code workspace settings
+.vscode/

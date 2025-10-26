@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #0b0f19;
+      color: #eaeefb;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    .wrap {
+      display: grid;
+      /* Verhindert vertikales "Springen" beim Auf-/Zuklappen: oben ausrichten */
+      place-items: start center;
+      height: 100%;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    .card {
+      width: min(1200px, 100%);
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    .title {
+      margin: 0 0 12px 0;
+      font-size: 28px;
+      font-weight: 700;
+      color: #cbd5e1;
+      text-decoration: none;
+      line-height: 1; /* gleichmäßige Höhe, vermeidet optisches "Absacken" */
+    }
+    .title-row {
+      display: flex;
+      align-items: center; /* Titel und Icon zentriert auf gleicher Höhe */
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .version {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .version label { color: #cbd5e1; font-size: 14px; }
+    .version-box {
+      display: inline-flex;
+      align-items: center;
+      background: #0f172a;
+      border: 1px solid #1f2937;
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+    }
+    .version-box label {
+      padding: 4px 8px;
+      color: #cbd5e1;
+      font-size: 13px;
+      border-right: 1px solid #1f2937;
+      background: #0f172a;
+    }
+    .version-box select {
+      background: #0f172a;
+      color: #e5e7eb;
+      border: 0;
+      padding: 4px 8px;
+      font-size: 13px;
+      line-height: 1.2;
+      height: 28px;
+      min-height: 0;
+      cursor: pointer;
+    }
+    .version-box select:focus { outline: none; }
+    .version-box select:focus-visible { outline: 2px solid #334155; outline-offset: -2px; }
+    .version-box select option { background: #0f172a; color: #e5e7eb; }
+  .version #status { color: #94a3b8; font-size: 12px; margin-left: 4px; }
+    .gh-link {
+      color: #cbd5e1;
+      opacity: 0.85;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      transition: color .2s ease, opacity .2s ease;
+      font-size: 28px; /* Icongröße an Überschrift anpassen */
+    }
+    .gh-link:hover { color: #ffffff; opacity: 1; }
+    .gh-link svg { width: 1em; height: 1em; display: block; }
+    .chart-wrap {
+      position: relative;
+      width: 100%;
+      /* Bewahrt Seitenverhältnis über CSS, passt sich der Breite an */
+      aspect-ratio: 3 / 2;
+      height: auto;
+      max-height: 50vh; /* begrenzt die Höhe auf großen Bildschirmen */
+      min-height: 140px; /* sinnvolle Mindesthöhe auf kleinen Displays */
+      background: transparent;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
+      background-color: transparent !important;
+    }
+    .note {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .error {
+      color: #fecaca;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .metric-card {
+      background: #0f172a;
+      border: 1px solid #1f2937;
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+    }
+    .metric-title {
+      color: #cbd5e1;
+      margin: 0 0 6px 0;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .metric-value {
+      font-size: 40px;
+      font-weight: 800;
+      color: #e5e7eb;
+      line-height: 1.1;
+    }
+    .metric-unit {
+      font-size: 0.55em;
+      color: #cbd5e1;
+      margin-left: 6px;
+    }
+    .metric-sub {
+      color: #94a3b8;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+    .divider {
+      margin: 16px 0 8px 0;
+      border: 0;
+      border-top: 1px solid #1f2937;
+    }
+    .imprint { margin-top: 0; }
+    .imprint a { color: #93c5fd; text-decoration: underline; }
+    .disclosure { margin-top: 0; }
+    .disclosure a { color: #93c5fd; text-decoration: underline; }
+    /* Gemeinsamer, sehr schlanker Footer mit einem aufklappbaren Bereich */
+    .footer {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #64748b;
+      text-align: center;
+    }
+    .footer summary { cursor: pointer; list-style: none; outline: none; }
+    .footer[open] { color: #94a3b8; }
+    .footer .info-body { margin-top: 6px; }
+    .footer a { color: #93c5fd; text-decoration: underline; }
+    @media (max-width: 720px) {
+      .metrics { grid-template-columns: 1fr; }
+    }
+  </style>
+  <!-- Chart.js + Zeitachsen-Adapter -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="title-row">
+        <a class="title" href="/">Code 4 Energy</a>
+        <a class="gh-link" href="https://github.com/Fl0x23/code4energy" target="_blank" rel="noopener" aria-label="GitHub Repository">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 .5C5.73.5.9 5.33.9 11.6c0 4.88 3.16 9.02 7.55 10.48.55.1.75-.24.75-.53 0-.26-.01-1.12-.02-2.04-3.07.67-3.72-1.31-3.72-1.31-.5-1.28-1.22-1.62-1.22-1.62-.99-.67.08-.66.08-.66 1.09.08 1.66 1.12 1.66 1.12.97 1.66 2.55 1.18 3.17.9.1-.7.38-1.18.69-1.45-2.45-.28-5.03-1.22-5.03-5.42 0-1.2.43-2.18 1.13-2.95-.11-.28-.49-1.41.11-2.94 0 0 .93-.3 3.05 1.13.89-.25 1.85-.38 2.81-.38.96 0 1.92.13 2.81.38 2.12-1.43 3.05-1.13 3.05-1.13.6 1.53.22 2.66.11 2.94.7.77 1.13 1.75 1.13 2.95 0 4.21-2.58 5.14-5.04 5.41.39.33.73.98.73 1.98 0 1.43-.01 2.58-.01 2.94 0 .29.2.64.75.53 4.39-1.46 7.55-5.6 7.55-10.48C23.1 5.33 18.27.5 12 .5z"/>
+          </svg>
+        </a>
+        <div class="version">
+          <div class="version-box">
+            <label for="containerSelect">Version</label>
+            <select id="containerSelect">
+              <option value="initial">initial</option>
+              <option value="beta">beta</option>
+            </select>
+          </div>
+          <span id="status" aria-live="polite"></span>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="priceChart" aria-label="Strompreis (Markt & Forecast)"></canvas>
+      </div>
+      <p class="note" style="margin-top:8px;">
+        API: <a id="apiLink" href="/initial/forecast" style="color:#93c5fd; text-decoration:underline;">/initial/forecast</a>
+      </p>
+
+      <!-- Kennzahlen -->
+      <div class="metrics">
+        <div class="metric-card" aria-labelledby="metricDeviationTitle">
+          <p class="metric-title" id="metricDeviationTitle">Durchschnittliche Abweichung</p>
+          <div class="metric-value" id="deviationValue">–</div>
+          <div class="metric-sub">Differenz zwischen Vorhersage und Marktpreis</div>
+        </div>
+        <div class="metric-card" aria-labelledby="metricTrendTitle">
+          <p class="metric-title" id="metricTrendTitle">Trend-Trefferquote</p>
+          <div class="metric-value" id="trendValue">–</div>
+          <div class="metric-sub">Preisbewegung (steigend/fallend) korrekt vorhergesagt</div>
+        </div>
+      </div>
+      <div class="divider" role="separator" aria-hidden="true"></div>
+      <details class="footer">
+        <summary>Infos</summary>
+        <div class="info-body">
+          <p style="margin:0;">Quelle: ENTSO‑E Transparency Platform (
+            <a href="https://transparency.entsoe.eu/" target="_blank" rel="noopener">transparency.entsoe.eu</a>
+            ). Nutzung gemäß den Nutzungsbedingungen der Plattform.</p>
+          <p style="margin:6px 0 0 0;">Impressum – Dieses Projekt ist ein nicht-kommerzieller Prototyp. Verantwortlich gemäß § 5 TMG: Code 4 Energy (Privatprojekt), E-Mail: <a href="mailto:flotzinger@web.de">flotzinger@web.de</a></p>
+        </div>
+      </details>
+    </div>
+  </div>
+  
+  <noscript>
+    JavaScript ist deaktiviert. Bitte aktivieren, um den Chart zu sehen.
+  </noscript>
+</body>
+</html>

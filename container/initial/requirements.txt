@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+apscheduler
+tzlocal
+entsoe-py
+pandas
+scikit-learn
+numpy
