@@ -4,8 +4,3 @@
 
 # VS Code workspace settings
 .vscode/
-
-# Local data (not for version control)
-# Keep folder, ignore its contents
-data/initial/**
-!data/initial/.gitkeep
