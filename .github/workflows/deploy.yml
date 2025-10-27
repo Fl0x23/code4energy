@@ -16,9 +16,10 @@ jobs:
       - name: Deploy to server via SFTP
         uses: easingthemes/ssh-deploy@v5.0.3
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          remote-user: deploy
-          server-ip: code4energy.de
-          remote-path: /home/fl0x23/code4energy/    
-          local-path: ./                      
-          args: "-rltgoDzvO --delete"
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          REMOTE_HOST: code4energy.de
+          REMOTE_USER: deploy
+          REMOTE_PORT: 22
+          SOURCE: ./
+          TARGET: /home/fl0x23/code4energy/
+          ARGS: "-rltgoDzvO --delete"
