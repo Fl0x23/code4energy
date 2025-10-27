@@ -4,3 +4,6 @@
 
 # VS Code workspace settings
 .vscode/
+
+# Initial data files
+data/initial/
