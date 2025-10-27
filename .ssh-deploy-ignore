@@ -1,0 +1,8 @@
+# Ignoriere Ordner
+data/
+.vscode/
+.github/
+
+# Ignoriere einzelne Dateien
+README.md
+.gitignore

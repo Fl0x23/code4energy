@@ -1,0 +1,24 @@
+name: 🚀 Deploy via SFTP
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to server via SFTP
+        uses: easingthemes/ssh-deploy@v5.0.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          remote-user: deploy
+          server-ip: code4energy.de
+          remote-path: /home/fl0x23/code4energy/    
+          local-path: ./                      
+          args: "-rltgoDzvO --delete"
