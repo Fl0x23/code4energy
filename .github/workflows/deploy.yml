@@ -35,9 +35,11 @@ jobs:
           script: |
             cd /home/fl0x23/code4energy
             echo "➡️ Pulling updates and rebuilding containers..."
-            docker compose pull
-            docker compose up -d --build --remove-orphans
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
+
             # Optional: Certbot-Renewal und Nginx-Reload
             docker exec certbot certbot renew --webroot -w /var/www/certbot || true
             docker exec proxy nginx -s reload || true
+
             echo "✅ Docker containers restarted successfully!"
