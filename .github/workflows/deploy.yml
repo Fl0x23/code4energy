@@ -43,3 +43,19 @@ jobs:
             docker exec proxy nginx -s reload || true
 
             echo "✅ Docker containers restarted successfully!"
+
+      - name: 🌐 Wait until website is reachable
+        run: |
+          URL=https://code4energy.de
+          echo "Waiting for $URL to become reachable..."
+          for i in {1..10}; do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}\n" $URL || echo "000")
+            echo "Attempt $i: HTTP $STATUS"
+            if [ "$STATUS" -eq 200 ]; then
+              echo "✅ Website is up!"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "❌ Website not reachable after 10 attempts!"
+          exit 1
