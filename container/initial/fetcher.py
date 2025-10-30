@@ -135,11 +135,20 @@ def fetch_entsoe_timeseries(
     except Exception as e:
         job_log(f"ℹ️ Hinweis: Zeitraum-Bestimmung fehlgeschlagen: {e}")
 
-    # --- CSV speichern ---
+    # --- CSV speichern (Index konsequent als UTC, ohne Fallback) ---
     if csv_path:
         try:
+            # Index robust in UTC bringen, Indexname 'time' beibehalten
+            if hasattr(s, "index"):
+                if getattr(s.index, "tz", None) is None:
+                    msg = "Zeitstempel-Index ohne Zeitzone (naive) – erwartete tz-aware Timestamps. Abbruch."
+                    job_log(f"❌ {msg}")
+                    raise ValueError(msg)
+                s.index = s.index.tz_convert("UTC")
+                s.index.name = "time"
+
             s.to_csv(csv_path, header=True, index=True)
-            job_log(f"✅ CSV gespeichert: {csv_path}")
+            job_log(f"✅ CSV gespeichert (UTC): {csv_path}")
         except Exception as e:
             job_log(f"⚠️ Konnte CSV nicht speichern ({csv_path}): {e}")
 
