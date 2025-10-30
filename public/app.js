@@ -10,7 +10,7 @@ async function loadData(container) {
   const statusEl = document.getElementById('status');
   statusEl.textContent = 'Lade Daten…';
   try {
-    const res = await fetch(`/${container}/forecast`);
+    const res = await fetch(`/${container}/forecast?market=true&previous_forecast=true`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     statusEl.textContent = '';
@@ -27,7 +27,7 @@ async function computeAndRenderMetrics(container) {
   const deviationEl = document.getElementById('deviationValue');
   const trendEl = document.getElementById('trendValue');
   try {
-    const res = await fetch(`/${container}/forecast`);
+    const res = await fetch(`/${container}/forecast?market=true&previous_forecast=true`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const arr = await res.json();
     // In EUR/kWh; wir brauchen Markt und Forecast auf gemeinsamen Startzeiten

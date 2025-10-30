@@ -26,6 +26,7 @@ import pandas as pd
 from zoneinfo import ZoneInfo
 import fetcher
 import model as csv_model
+from typing import Optional
 
 # Einheitliche Zeitzone aus dem System (z. B. via TZ=Europe/Berlin in Docker)
 tz = get_localzone()
@@ -174,125 +175,6 @@ def info():
     return APP_INFO
 
 
-@app.get("/forecast")
-def get_forecast():
-    """Liest die feste Forecast-CSV (`/data/price_forecast.csv`) und gibt sie
-    als JSON-Zeitfenster zurück.
-
-    Verarbeitungsschritte:
-    - Forecast-CSV laden
-    - Zeitstempel in lokale Zeitzone konvertieren
-    - Schrittweite aus Median der Deltas bestimmen
-    - Einträge in ein homogenes Intervallformat [start, end) transformieren
-    - Marktpreise der letzten 2 Tage ergänzen
-    """
-    fixed_path = "/data/price_forecast.csv"
-    if not os.path.exists(fixed_path):
-        raise HTTPException(status_code=404, detail="Keine Forecast-CSV gefunden.")
-    latest = fixed_path
-
-    try:
-        df = pd.read_csv(latest, parse_dates=["time"])  # erwartet Spalten: time, predicted_price_eur_mwh, ...
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"CSV konnte nicht gelesen werden: {e}")
-
-    if df.empty or "time" not in df.columns or "predicted_price_eur_mwh" not in df.columns:
-        raise HTTPException(status_code=500, detail="CSV hat unerwartetes Format oder ist leer.")
-
-    # Zeitspalte nach UTC interpretieren (falls naiv) und nach Europe/Berlin konvertieren
-    if df["time"].dt.tz is None:
-        df["time"] = df["time"].dt.tz_localize("UTC")
-    df["time_local"] = df["time"].dt.tz_convert(ZoneInfo("Europe/Berlin"))
-
-    # Schrittweite bestimmen (Median der Deltas)
-    deltas = df.sort_values("time_local")["time_local"].diff().dropna()
-    step = deltas.median() if not deltas.empty else pd.Timedelta("1h")
-
-    data_items = []
-    df_sorted = df.sort_values("time_local").reset_index(drop=True)
-    for _, row in df_sorted.iterrows():
-        start = row["time_local"]
-        end = start + step
-        price_kwh = float(row["predicted_price_eur_mwh"]) / 1000.0
-        # Variante aus CSV ableiten: wenn exogene Spalten vorhanden und nicht NaN, dann with_exo, sonst univariate
-        has_exo_cols = all(col in df.columns for col in ["solar_input_mw", "wind_onshore_input_mw", "wind_offshore_input_mw"])
-        if has_exo_cols:
-            exo_present = (
-                not pd.isna(row.get("solar_input_mw"))
-                or not pd.isna(row.get("wind_onshore_input_mw"))
-                or not pd.isna(row.get("wind_offshore_input_mw"))
-            )
-            variant = "with_exo" if exo_present else "univariate"
-        else:
-            variant = "univariate"
-        data_items.append({
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "price": round(price_kwh, 5),
-            "price_origin": "forecast",
-            "variant": variant,
-        })
-
-    # Marktpreise der letzten 2 Tage aus entsoe_prices_*.csv lesen (bis zum letzten verfügbaren Marktzeitpunkt)
-    market_pattern = "/data/entsoe_prices_*.csv"
-    market_files = glob.glob(market_pattern)
-    market_items = []
-    if market_files:
-        latest_market = max(market_files, key=lambda f: os.path.getmtime(f))
-        try:
-            # Robust einlesen: 2 Spalten (Zeit, Preis) ohne Header oder mit Header
-            try:
-                dfm = pd.read_csv(latest_market)
-                # Spalten bestimmen
-                if "time" in dfm.columns:
-                    tcol = "time"
-                else:
-                    tcol = dfm.columns[0]
-                # Wertspalte
-                vcols = [c for c in dfm.columns if c != tcol]
-                vcol = vcols[0] if vcols else dfm.columns[1]
-            except Exception:
-                dfm = pd.read_csv(latest_market, header=None, names=["time", "value"])  # Fallback
-                tcol, vcol = "time", "value"
-
-            # Zeiten konvertieren
-            dfm[tcol] = pd.to_datetime(dfm[tcol], utc=True, errors="coerce")
-            dfm = dfm.dropna(subset=[tcol])
-            # letzte 2 Tage bis zum letzten verfügbaren Marktzeitpunkt filtern
-            if not dfm.empty:
-                last_market_utc = pd.to_datetime(dfm[tcol].max()).tz_convert("UTC")
-                start_utc = last_market_utc - pd.Timedelta(days=2)
-                dfm = dfm[(dfm[tcol] >= start_utc) & (dfm[tcol] <= last_market_utc)]
-            if not dfm.empty:
-                # lokale Zeit und Schrittweite
-                dfm["time_local"] = dfm[tcol].dt.tz_convert(ZoneInfo("Europe/Berlin"))
-                deltas_m = dfm.sort_values("time_local")["time_local"].diff().dropna()
-                step_m = deltas_m.median() if not deltas_m.empty else pd.Timedelta("1h")
-                dfm = dfm.sort_values("time_local").reset_index(drop=True)
-                for _, r in dfm.iterrows():
-                    s = r["time_local"]
-                    e = s + step_m
-                    price_eur_mwh = float(r[vcol])
-                    market_items.append({
-                        "start": s.isoformat(),
-                        "end": e.isoformat(),
-                        "price": round(price_eur_mwh / 1000.0, 5),
-                        "price_origin": "market",
-                    })
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Market-CSV konnte nicht gelesen werden: {e}")
-
-    # Kombinierte Liste (zuerst Markt, dann Forecast), nach Startzeit sortiert
-    combined = market_items + data_items
-    combined.sort(key=lambda x: x["start"])
-
-    # Lizenz-/Quellenhinweis als Header ergänzen, Body bleibt das bekannte Array
-    headers = {
-        "X-Data-Source": "ENTSO-E Transparency Platform",
-        "X-Data-URL": "https://transparency.entsoe.eu",
-        "X-Usage-Notice": "Nutzung gemäß den Nutzungsbedingungen der Plattform",
-    }
-    return JSONResponse(content=combined, headers=headers)
 
 
 
@@ -330,3 +212,186 @@ def get_deviation():
             status_code=200,
         )
     return JSONResponse(content=result)
+
+
+@app.get("/forecast")
+def get_forecast(
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    market: bool = False,
+    days: int = 1,
+    previous_forecast: bool = False,
+):
+    """Liefert Forecast-Daten (und optional Marktdaten) als JSON-Intervalle.
+
+        Query-Parameter:
+    - start: ISO-Zeitpunkt (interpretiert als lokale Zeit, falls ohne TZ). Standard: Gestern 00:00 lokale Zeit.
+        - end:   ISO-Zeitpunkt (interpretiert als lokale Zeit, falls ohne TZ). Standard: letztes Zeitfenster der Forecast-CSV.
+    - market: Wenn true, werden zusätzlich vorhandene Marktdaten aus entsoe_prices_*.csv ausgegeben.
+    - days:  Anzahl Tage zurück für den Standard-Start (wenn "start" nicht gesetzt ist). Default: 1 ("gestern").
+        - previous_forecast: Wenn false, werden Forecast-Werte vor dem Ende der Marktdaten
+            im gewählten Zeitraum nicht geliefert (Filter auf t >= letztem Marktzeitpunkt).
+            Default: false.
+
+        Ausgabe (Zeitstempel in lokaler System-Zeitzone): Liste von Objekten
+            {
+                "start": ISO-LOCAL,         # inkl. Millisekunden und Offset
+                "end": ISO-LOCAL,           # = start + Schrittweite (z. B. 15min)
+                "price": float,             # EUR/kWh (5 Nachkommastellen)
+                "price_origin": "forecast" | "market"
+            }
+
+        Beispiele:
+        - GET /forecast
+        - GET /forecast?market=true
+        - GET /forecast?start=2025-10-28&end=2025-10-29
+        - GET /forecast?start=2025-10-28T00:00:00+01:00&end=2025-10-28T12:00:00+01:00&market=true
+        - GET /forecast?start=2025-10-28T00:00&market=true
+        """
+    # CSV-Pfade ermitteln
+    forecast_csv = "/data/price_forecast.csv"
+    price_path = csv_model._latest_csv("/data/entsoe_prices_*.csv")  # type: ignore[attr-defined]
+
+    # Forecast CSV muss existieren, sonst ggf. nur Market (wenn angefordert)
+    has_forecast = os.path.exists(forecast_csv)
+    has_market = price_path is not None and price_path.exists()
+
+    if not has_forecast and not (market and has_market):
+        raise HTTPException(status_code=404, detail="Keine Daten gefunden (Forecast/Market)")
+
+    # Helper: flexible Zeit-Parse-Funktion
+    def _parse_dt(value: Optional[str]) -> Optional[pd.Timestamp]:
+        if not value:
+            return None
+        try:
+            ts = pd.to_datetime(value, errors="coerce")
+            if pd.isna(ts):
+                return None
+            # Naive Zeiten als lokale Zeit interpretieren
+            if ts.tzinfo is None:
+                ts = ts.tz_localize(tz)
+            else:
+                # In System-TZ konvertieren für Konsistenz, danach UTC
+                ts = ts.tz_convert(tz)
+            return ts.tz_convert("UTC")
+        except Exception:
+            return None
+
+    # Standard-Start: Vorgestern 00:00 (lokal)
+    if start is None:
+        today_local = datetime.datetime.now(tz=tz).date()
+        try:
+            days_back = max(0, int(days))
+        except Exception:
+            days_back = 1
+        vorgestern = today_local - datetime.timedelta(days=days_back)
+        start_local = datetime.datetime.combine(vorgestern, datetime.time(0, 0, tzinfo=tz))
+        start_utc = pd.Timestamp(start_local).tz_convert("UTC")
+    else:
+        start_utc = _parse_dt(start)
+
+    # Forecast-Daten einlesen (falls vorhanden)
+    s_fore = pd.Series(dtype=float)
+    fore_last = None
+    if has_forecast:
+        try:
+            df_f = pd.read_csv(
+                forecast_csv,
+                usecols=["time", "predicted_price_eur_mwh"],
+            )
+            df_f["time"] = pd.to_datetime(df_f["time"], utc=True, errors="coerce")
+            df_f = df_f.dropna(subset=["time"]).drop_duplicates(subset=["time"], keep="last")
+            s_fore = pd.Series(
+                pd.to_numeric(df_f["predicted_price_eur_mwh"], errors="coerce").values,
+                index=df_f["time"],
+            ).dropna()
+            s_fore = s_fore[~s_fore.index.duplicated(keep="last")].sort_index()
+            fore_last = s_fore.index.max() if not s_fore.empty else None
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Fehler beim Lesen der Forecast-CSV: {e}")
+
+    # Standard-Ende: letztes Zeitfenster der Forecast-CSV (falls vorhanden), sonst jetzt
+    if end is None:
+        if fore_last is not None:
+            end_utc = fore_last
+        else:
+            end_utc = pd.Timestamp(datetime.datetime.now(datetime.timezone.utc))
+    else:
+        end_utc = _parse_dt(end)
+
+    # Fallbacks, falls Parse fehlschlug
+    if start_utc is None:
+        raise HTTPException(status_code=400, detail="Ungültiger Start-Parameter")
+    if end_utc is None:
+        raise HTTPException(status_code=400, detail="Ungültiger End-Parameter")
+
+    # Sicherstellen: start <= end
+    if start_utc > end_utc:
+        start_utc, end_utc = end_utc, start_utc
+
+    # Filter Forecast auf Zeitfenster
+    s_fore = s_fore.loc[(s_fore.index >= start_utc) & (s_fore.index <= end_utc)] if not s_fore.empty else s_fore
+
+    # Marktdaten optional laden + filtern
+    s_price = pd.Series(dtype=float)
+    if market and has_market:
+        try:
+            s_price = csv_model._read_series(price_path)  # type: ignore[attr-defined]
+            s_price = s_price.loc[(s_price.index >= start_utc) & (s_price.index <= end_utc)]
+        except Exception as e:
+            # Marktdaten sind optional – Fehler nicht fatal, aber melden
+            fetcher.job_log(f"⚠️ Fehler beim Lesen der Markt-CSV: {e}")
+            s_price = pd.Series(dtype=float)
+
+    # Optional: Forecasts vor letztem Marktzeitpunkt ausblenden
+    if not previous_forecast and not s_fore.empty and market:
+        if 's_price' in locals() and not s_price.empty:
+            last_market_ts = s_price.index.max()
+            if pd.notna(last_market_ts):
+                s_fore = s_fore.loc[s_fore.index > last_market_ts]
+
+    # Antwortdaten bauen (Intervall-basierte Ausgabe in lokaler Zeit)
+    def _infer_step(idx: pd.DatetimeIndex) -> pd.Timedelta:
+        if idx.size >= 2:
+            diffs = pd.Series(idx).diff().dropna()
+            try:
+                td = diffs.min()
+                if pd.isna(td) or td <= pd.Timedelta(0):
+                    return pd.Timedelta(minutes=15)
+                return td
+            except Exception:
+                return pd.Timedelta(minutes=15)
+        return pd.Timedelta(minutes=15)
+
+    items = []
+
+    # Forecast-Einträge
+    if not s_fore.empty:
+        step_fore = _infer_step(s_fore.index)
+        for t, v in s_fore.items():
+            start_local = t.tz_convert(tz).to_pydatetime().isoformat(timespec="milliseconds")
+            end_local = (t + step_fore).tz_convert(tz).to_pydatetime().isoformat(timespec="milliseconds")
+            items.append({
+                "start": start_local,
+                "end": end_local,
+                "price": round(float(v) / 1000.0, 5),  # EUR/kWh
+                "price_origin": "forecast",
+            })
+
+    # Markt-Einträge optional
+    if market and not s_price.empty:
+        step_mkt = _infer_step(s_price.index)
+        for t, v in s_price.items():
+            start_local = t.tz_convert(tz).to_pydatetime().isoformat(timespec="milliseconds")
+            end_local = (t + step_mkt).tz_convert(tz).to_pydatetime().isoformat(timespec="milliseconds")
+            items.append({
+                "start": start_local,
+                "end": end_local,
+                "price": round(float(v) / 1000.0, 5),  # EUR/kWh
+                "price_origin": "market",
+            })
+
+    # nach Startzeit sortieren
+    items.sort(key=lambda x: x["start"])
+
+    return JSONResponse(content=items)
