@@ -332,21 +332,26 @@ def get_forecast(
     # Filter Forecast auf Zeitfenster
     s_fore = s_fore.loc[(s_fore.index >= start_utc) & (s_fore.index <= end_utc)] if not s_fore.empty else s_fore
 
-    # Marktdaten optional laden + filtern
-    s_price = pd.Series(dtype=float)
-    if market and has_market:
+    # Marktdaten laden
+    # - Für die Antwort nur schneiden, wenn market=true
+    # - Für previous_forecast-Filter den global letzten Marktzeitpunkt verwenden (unabhängig vom Window)
+    s_price_all = pd.Series(dtype=float)
+    s_price_window = pd.Series(dtype=float)
+    if has_market:
         try:
-            s_price = csv_model._read_series(price_path)  # type: ignore[attr-defined]
-            s_price = s_price.loc[(s_price.index >= start_utc) & (s_price.index <= end_utc)]
+            s_price_all = csv_model._read_series(price_path)  # type: ignore[attr-defined]
+            if market:
+                s_price_window = s_price_all.loc[(s_price_all.index >= start_utc) & (s_price_all.index <= end_utc)]
         except Exception as e:
             # Marktdaten sind optional – Fehler nicht fatal, aber melden
             fetcher.job_log(f"⚠️ Fehler beim Lesen der Markt-CSV: {e}")
-            s_price = pd.Series(dtype=float)
+            s_price_all = pd.Series(dtype=float)
+            s_price_window = pd.Series(dtype=float)
 
-    # Optional: Forecasts vor letztem Marktzeitpunkt ausblenden
-    if not previous_forecast and not s_fore.empty and market:
-        if 's_price' in locals() and not s_price.empty:
-            last_market_ts = s_price.index.max()
+    # Optional: Forecasts vor letztem (globalen) Marktzeitpunkt ausblenden
+    if not previous_forecast and not s_fore.empty:
+        if not s_price_all.empty:
+            last_market_ts = s_price_all.index.max()
             if pd.notna(last_market_ts):
                 s_fore = s_fore.loc[s_fore.index > last_market_ts]
 
@@ -379,9 +384,9 @@ def get_forecast(
             })
 
     # Markt-Einträge optional
-    if market and not s_price.empty:
-        step_mkt = _infer_step(s_price.index)
-        for t, v in s_price.items():
+    if market and not s_price_window.empty:
+        step_mkt = _infer_step(s_price_window.index)
+        for t, v in s_price_window.items():
             start_local = t.tz_convert(tz).to_pydatetime().isoformat(timespec="milliseconds")
             end_local = (t + step_mkt).tz_convert(tz).to_pydatetime().isoformat(timespec="milliseconds")
             items.append({
