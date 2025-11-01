@@ -5,5 +5,8 @@
 # VS Code workspace settings
 .vscode/
 
+# Python virtual environment
+.venv/
+
 # Initial data files
 data/initial/
