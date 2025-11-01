@@ -1,0 +1,10 @@
+[
+  {
+    "name": "beta",
+    "url": "/beta/openapi.json"
+  },
+  {
+    "name": "initial",
+    "url": "/initial/openapi.json"
+  }
+]

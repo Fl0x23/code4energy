@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: check-apis-manifest
+        name: Check APIs Manifest matches container/*
+        entry: python scripts/check_apis.py
+        language: system
+        pass_filenames: false
+        stages: [commit]
