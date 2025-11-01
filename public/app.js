@@ -1,5 +1,13 @@
 let chart = null;
 
+async function fetchContainers() {
+  const res = await fetch('/docs/apis.json', { cache: 'no-cache' });
+  if (!res.ok) throw new Error(`Manifest ${res.status}`);
+  const arr = await res.json();
+  if (!Array.isArray(arr) || !arr.length) throw new Error('Manifest leer');
+  return arr.map(e => String(e.name || '').trim()).filter(Boolean);
+}
+
 function updateApiLink(container) {
   const link = document.getElementById('apiLink');
   link.href = `/${container}/forecast`;
@@ -193,8 +201,25 @@ function createChart(ctx, marketPoints, forecastPoints) {
   const ctx = document.getElementById('priceChart').getContext('2d');
   const select = document.getElementById('containerSelect');
   const saved = localStorage.getItem('c4e_container') || 'initial';
-  select.value = saved;
-  updateApiLink(saved);
+
+  // Populate containerSelect from manifest
+  let containers = [];
+  try {
+    containers = await fetchContainers();
+  } catch (e) {
+    // Fallback, falls Manifest fehlt – UI weiterhin nutzbar halten
+    containers = ['initial', 'beta'];
+  }
+  // Build options
+  select.innerHTML = '';
+  for (const name of containers) {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    select.appendChild(opt);
+  }
+  const initial = containers.includes(saved) ? saved : containers[0];
+  select.value = initial;
+  updateApiLink(initial);
 
   async function loadAndRender(container) {
     const data = await loadData(container);
@@ -218,8 +243,8 @@ function createChart(ctx, marketPoints, forecastPoints) {
   }
 
   try {
-    await loadAndRender(saved);
-    await computeAndRenderMetrics(saved);
+  await loadAndRender(initial);
+  await computeAndRenderMetrics(initial);
     setInterval(() => chart && chart.update('none'), 60000);
   } catch (e) {
     console.error(e);
