@@ -35,12 +35,22 @@ scheduler = BackgroundScheduler(timezone=tz)
 # Log-Datei (einfache lokale Datei im Container)
 LOG_FILE = "app.log"
 
+# Root-Prefix (für Reverse Proxy), z. B. "/initial"; per ENV ROOT_PATH anpassbar
+ROOT_PATH = os.getenv("ROOT_PATH", "/initial")
+
 # Basis-App-Infos und FastAPI-Metadaten (per ENV überschreibbar)
 APP_INFO = {
-    "app": os.getenv("APP_NAME", "code4energy initial API"),
+    "app": os.getenv("APP_NAME", "Code 4 Energy Initial API"),
     "description": os.getenv("APP_DESCRIPTION", "CSV-basierte FastAPI für ENTSO-E Daten und Preis-Forecasts"),
     "version": os.getenv("APP_VERSION", "1.0.0"),
+    "root_path": ROOT_PATH,
+    "docs_url": f"{ROOT_PATH}/docs",
+    "redoc_url": f"{ROOT_PATH}/redoc",
+    "openapi_url": f"{ROOT_PATH}/openapi.json",
 }
+
+# Hinweis: App-Instanz nach Definition von `lifespan` erzeugen
+
 
 def run_etl_ml_job():
     """Geplanter ETL/ML-Job (Intervall).
@@ -160,13 +170,9 @@ app = FastAPI(
     description=APP_INFO["description"],
     version=APP_INFO["version"],
     lifespan=lifespan,
+    # Wichtig hinter Reverse Proxy: stellt sicher, dass Routen und OpenAPI unter /initial funktionieren
+    root_path=ROOT_PATH,
 )
-
-
-@app.get("/")
-def read_root():
-    """Weiterleitung auf /info (relativ, damit Nginx-Prefix erhalten bleibt)."""
-    return RedirectResponse(url="info", status_code=307)
 
 
 @app.get("/info")

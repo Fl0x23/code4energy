@@ -1,0 +1,126 @@
+openapi: 3.0.3
+info:
+  title: code4energy initial API
+  version: 1.0.0
+  description: Preis-Forecasts und Metriken (hinter /initial).
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+servers:
+  - url: /initial
+security: []
+paths:
+  /info:
+    get:
+      summary: App-Infos
+      operationId: initialInfo
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppInfo'
+        "404":
+          description: Not found
+
+  /forecast:
+    get:
+      summary: Forecast (optional Markt)
+      operationId: initialForecast
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PriceInterval'
+        "404":
+          description: Not found
+
+  /trend:
+    get:
+      summary: Trend-Hitrate
+      operationId: initialTrend
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrendResponse'
+        "404":
+          description: Not found
+
+  /deviation:
+    get:
+      summary: Durchschnittliche Abweichung
+      operationId: initialDeviation
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviationResponse'
+        "404":
+          description: Not found
+
+components:
+  schemas:
+    AppInfo:
+      type: object
+      properties:
+        app:
+          type: string
+        description:
+          type: string
+        version:
+          type: string
+        root_path:
+          type: string
+        docs_url:
+          type: string
+        redoc_url:
+          type: string
+        openapi_url:
+          type: string
+
+    PriceInterval:
+      type: object
+      required: [start, end, price, price_origin]
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        price:
+          type: number
+          format: double
+        price_origin:
+          type: string
+          enum: [forecast, market]
+
+    TrendResponse:
+      type: object
+      properties:
+        hits:
+          type: integer
+        total:
+          type: integer
+        hit_rate_percent:
+          type: number
+          format: double
+
+    DeviationResponse:
+      type: object
+      properties:
+        avg_deviation_ct_per_kwh:
+          type: number
+          format: double
+        count:
+          type: integer

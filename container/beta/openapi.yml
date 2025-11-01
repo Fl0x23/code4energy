@@ -1,0 +1,78 @@
+openapi: 3.0.3
+info:
+  title: Minimal beta API
+  version: 1.0.0
+  description: Demo-Forecast API (hinter /beta).
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+servers:
+  - url: /beta
+security: []
+paths:
+  /info:
+    get:
+      summary: App-Infos
+      operationId: betaInfo
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppInfo'
+        "404":
+          description: Not found
+
+  /forecast:
+    get:
+      summary: Demo-Forecast aus CSV
+      operationId: betaForecast
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PriceInterval'
+        "404":
+          description: Not found
+
+components:
+  schemas:
+    AppInfo:
+      type: object
+      properties:
+        app:
+          type: string
+        description:
+          type: string
+        version:
+          type: string
+        root_path:
+          type: string
+        docs_url:
+          type: string
+        redoc_url:
+          type: string
+        openapi_url:
+          type: string
+
+    PriceInterval:
+      type: object
+      required: [start, end, price, price_origin]
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+        price:
+          type: number
+          format: double
+        price_origin:
+          type: string
+          enum: [forecast, market]

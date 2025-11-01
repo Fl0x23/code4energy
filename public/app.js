@@ -4,6 +4,13 @@ function updateApiLink(container) {
   const link = document.getElementById('apiLink');
   link.href = `/${container}/forecast`;
   link.textContent = `/${container}/forecast`;
+
+  const docs = document.getElementById('docsLink');
+  const redoc = document.getElementById('redocLink');
+  const openapi = document.getElementById('openapiLink');
+  if (docs) { docs.href = `/${container}/docs`; docs.textContent = `/${container}/docs`; }
+  if (redoc) { redoc.href = `/${container}/redoc`; redoc.textContent = `/${container}/redoc`; }
+  if (openapi) { openapi.href = `/${container}/openapi.json`; openapi.textContent = `/${container}/openapi.json`; }
 }
 
 async function loadData(container) {

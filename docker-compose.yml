@@ -16,6 +16,7 @@ services:
     env_file: .env
     container_name: initial
     environment:
+      - ROOT_PATH=/initial
       - TZ=Europe/Berlin
       - RUN_JOB_ON_START=true
     volumes:
@@ -24,5 +25,7 @@ services:
   beta:
     build: ./container/beta
     container_name: beta
+    environment:
+      - ROOT_PATH=/beta
     volumes:
       - ./data/beta:/data

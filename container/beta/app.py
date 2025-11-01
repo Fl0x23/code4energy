@@ -5,26 +5,31 @@ import csv
 import os
 from pathlib import Path
 
+# Root-Prefix (für Reverse Proxy), z. B. "/beta"; per ENV ROOT_PATH anpassbar
+ROOT_PATH = os.getenv("ROOT_PATH", "/beta")
+
 APP_INFO = {
-    "app": "Minimal beta API",
-    "description": "Eine extrem einfache FastAPI",
-    "version": "1.0.0",
+    "app": os.getenv("APP_NAME", "Code 4 Energy Beta API"),
+    "description": os.getenv("APP_DESCRIPTION", "Dient als Vorlage"),
+    "version": os.getenv("APP_VERSION", "1.0.0"),
+    "root_path": ROOT_PATH,
+    "docs_url": f"{ROOT_PATH}/docs",
+    "redoc_url": f"{ROOT_PATH}/redoc",
+    "openapi_url": f"{ROOT_PATH}/openapi.json",
 }
 
 app = FastAPI(
     title=APP_INFO["app"],
     description=APP_INFO["description"],
     version=APP_INFO["version"],
+    # Wichtig hinter Reverse Proxy: stellt sicher, dass Routen und OpenAPI unter /beta funktionieren
+    root_path=ROOT_PATH,
 )
 
 @app.get("/info")
 def info():
     return APP_INFO
 
-@app.get("/")
-def read_root():
-    """Weiterleitung auf /info (relativ, damit Nginx-Prefix erhalten bleibt)."""
-    return RedirectResponse(url="info", status_code=307)
 
 @app.get("/forecast")
 def forecast_demo():
