@@ -28,11 +28,18 @@ else:
     # Build expected entries
     expected = [{"name": n, "url": f"/{n}/openapi.json"} for n in names]
 
-    # Ensure each container has an openapi.yml (optional but helpful)
+    # Ensure each container has required files
+    required = [
+        "openapi.yml",
+        "Dockerfile",
+        "README.md",
+        "app.py",
+    ]
     for n in names:
-        yml = container_dir / n / "openapi.yml"
-        if not yml.exists():
-            errors.append(f"missing openapi.yml in container/{n}")
+        for fname in required:
+            fpath = container_dir / n / fname
+            if not fpath.exists():
+                errors.append(f"missing {fname} in container/{n}")
 
     # Load current manifest
     if not manifest_file.exists():
