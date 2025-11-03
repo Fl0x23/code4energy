@@ -1,7 +1,7 @@
 <img width="1241" height="691" alt="image" src="https://github.com/user-attachments/assets/750ffec6-5862-47a2-91cd-ce5a2d5bc328" />
 
-# Code 4 Energy – Die Energieprognose der nächsten Generation
-Erstellen Sie ein neues Vorhersagemodell oder verbessern Sie ein bestehendes.
+# Code 4 Energy
+Erstelle ein Vorhersagemodell oder verbessere ein bestehendes.
 
 ## Integration in EVCC (Initialmodell)
 ```
