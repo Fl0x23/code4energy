@@ -27,7 +27,7 @@
     defaultModelExpandDepth: 0,
     presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
     layout: 'StandaloneLayout',
-    filter: true,
+    filter: false,
   });
 
   // Auswahländerung in der Topbar persistieren
