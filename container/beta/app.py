@@ -26,12 +26,12 @@ app = FastAPI(
     root_path=ROOT_PATH,
 )
 
-@app.get("/info")
+@app.get("/info", tags=["Informationen"])
 def info():
     return APP_INFO
 
 
-@app.get("/forecast")
+@app.get("/forecast", tags=["Vorhersage"])
 def forecast_demo():
     """Liest eine Demo-CSV aus /data/price_forecast_demo.csv und gibt sie als JSON-Liste zurück.
 

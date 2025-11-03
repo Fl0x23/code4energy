@@ -175,7 +175,7 @@ app = FastAPI(
 )
 
 
-@app.get("/info")
+@app.get("/info", tags=["Informationen"])
 def info():
     """Metadaten-Endpoint der Anwendung."""
     return APP_INFO
@@ -184,7 +184,7 @@ def info():
 
 
 
-@app.get("/trend")
+@app.get("/trend", tags=["Vorhersage"])
 def get_trend():
     """Gibt die Trend-Trefferquote (Richtungs-Hitrate) zwischen Marktpreis und Forecast zurück.
 
@@ -200,7 +200,7 @@ def get_trend():
     return JSONResponse(content=result)
 
 
-@app.get("/deviation")
+@app.get("/deviation", tags=["Vorhersage"])
 def get_deviation():
     """Gibt die durchschnittliche Abweichung (MAE) in ct/kWh zwischen Marktpreis und Forecast zurück.
 
@@ -220,7 +220,7 @@ def get_deviation():
     return JSONResponse(content=result)
 
 
-@app.get("/forecast")
+@app.get("/forecast", tags=["Vorhersage"])
 def get_forecast(
     start: Optional[str] = None,
     end: Optional[str] = None,
