@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: code4energy initial API
+  title: Code 4 Energy Initial API
   version: 1.0.0
   description: Preis-Forecasts und Metriken (hinter /initial).
   license:
@@ -28,6 +28,51 @@ paths:
     get:
       summary: Forecast (optional Markt)
       operationId: initialForecast
+      parameters:
+        - name: start
+          in: query
+          required: false
+          description: >-
+            ISO-Zeitpunkt; naive Werte werden als lokale Zeit interpretiert. Wenn
+            nicht gesetzt, wird 00:00 lokaler Zeit des Tages des letzten verfügbaren
+            Marktwerts minus "days" Tage verwendet. Fehlen Marktdaten und "start",
+            erfolgt 404.
+          schema:
+            type: string
+            format: date-time
+        - name: end
+          in: query
+          required: false
+          description: >-
+            ISO-Zeitpunkt; naive Werte werden als lokale Zeit interpretiert. Standard
+            ist das letzte Zeitfenster der Forecast-CSV, sonst jetzt.
+          schema:
+            type: string
+            format: date-time
+        - name: market
+          in: query
+          required: false
+          description: Wenn true, werden zusätzlich Marktdaten ausgegeben.
+          schema:
+            type: boolean
+            default: false
+        - name: days
+          in: query
+          required: false
+          description: Anzahl Tage zurück für den Standard-Start.
+          schema:
+            type: integer
+            minimum: 0
+            default: 1
+        - name: previous_forecast
+          in: query
+          required: false
+          description: >-
+            Wenn false, werden Forecast-Werte bis zum global letzten Marktzeitpunkt
+            ausgeblendet (Filter t > letzter Marktzeitpunkt).
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
           description: OK
@@ -37,6 +82,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/PriceInterval'
+        "400":
+          description: Ungültige Parameter
         "404":
           description: Not found
 
