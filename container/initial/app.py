@@ -231,13 +231,18 @@ def get_forecast(
     """Liefert Forecast-Daten (und optional Marktdaten) als JSON-Intervalle.
 
         Query-Parameter:
-    - start: ISO-Zeitpunkt (interpretiert als lokale Zeit, falls ohne TZ). Standard: Gestern 00:00 lokale Zeit.
-        - end:   ISO-Zeitpunkt (interpretiert als lokale Zeit, falls ohne TZ). Standard: letztes Zeitfenster der Forecast-CSV.
-    - market: Wenn true, werden zusätzlich vorhandene Marktdaten aus entsoe_prices_*.csv ausgegeben.
-    - days:  Anzahl Tage zurück für den Standard-Start (wenn "start" nicht gesetzt ist). Default: 1 ("gestern").
-        - previous_forecast: Wenn false, werden Forecast-Werte vor dem Ende der Marktdaten
-            im gewählten Zeitraum nicht geliefert (Filter auf t >= letztem Marktzeitpunkt).
-            Default: false.
+        - start: ISO-Zeitpunkt (interpretiert als lokale Zeit, falls ohne TZ).
+                 Standard: 00:00 lokale Zeit des Tages des letzten verfügbaren
+                 Marktwerts, minus "days" Tage. Sind keine Marktdaten vorhanden
+                 und "start" fehlt, wird 404 zurückgegeben (bitte "start" angeben).
+        - end:   ISO-Zeitpunkt (interpretiert als lokale Zeit, falls ohne TZ).
+                 Standard: letztes Zeitfenster der Forecast-CSV (falls vorhanden), sonst jetzt.
+        - market: Wenn true, werden zusätzlich vorhandene Marktdaten aus entsoe_prices_*.csv ausgegeben.
+        - days:  Anzahl Tage zurück für den Standard-Start (wenn "start" nicht gesetzt ist).
+                 Default: 1 (bezieht sich auf den Tag des letzten Marktwerts).
+        - previous_forecast: Wenn false, werden Forecast-Werte, deren Zeitstempel
+            nicht nach dem global letzten Marktzeitpunkt liegen, ausgeblendet
+            (Filter: t > letzter globaler Marktzeitpunkt). Default: false.
 
         Ausgabe (Zeitstempel in lokaler System-Zeitzone): Liste von Objekten
             {
@@ -265,6 +270,21 @@ def get_forecast(
     if not has_forecast and not (market and has_market):
         raise HTTPException(status_code=404, detail="Keine Daten gefunden (Forecast/Market)")
 
+    # Marktdaten global laden (nur einmal), um u. a. das Standard-Startdatum
+    # relativ zum letzten verfügbaren Marktzeitpunkt zu bestimmen
+    s_price_all = pd.Series(dtype=float)
+    last_market_ts = None
+    if has_market:
+        try:
+            s_price_all = csv_model._read_series(price_path)  # type: ignore[attr-defined]
+            if not s_price_all.empty:
+                last_market_ts = s_price_all.index.max()
+        except Exception as e:
+            # Marktdaten sind optional – Fehler nicht fatal, aber melden
+            fetcher.job_log(f"⚠️ Fehler beim Lesen der Markt-CSV (früh): {e}")
+            s_price_all = pd.Series(dtype=float)
+            last_market_ts = None
+
     # Helper: flexible Zeit-Parse-Funktion
     def _parse_dt(value: Optional[str]) -> Optional[pd.Timestamp]:
         if not value:
@@ -283,14 +303,20 @@ def get_forecast(
         except Exception:
             return None
 
-    # Standard-Start: Vorgestern 00:00 (lokal)
+    # Standard-Start: 00:00 (lokal) relativ zum letzten Marktwert
     if start is None:
-        today_local = datetime.datetime.now(tz=tz).date()
+        # Referenz-Datum: Tag des letzten Marktwerts; ohne Marktdaten kein Default-Start
+        if last_market_ts is None or pd.isna(last_market_ts):
+            raise HTTPException(
+                status_code=404,
+                detail="Keine Marktdaten vorhanden, um den Standard-Start zu bestimmen. Bitte 'start' angeben.",
+            )
+        ref_date = last_market_ts.tz_convert(tz).date()
         try:
             days_back = max(0, int(days))
         except Exception:
             days_back = 1
-        vorgestern = today_local - datetime.timedelta(days=days_back)
+        vorgestern = ref_date - datetime.timedelta(days=days_back)
         start_local = datetime.datetime.combine(vorgestern, datetime.time(0, 0, tzinfo=tz))
         start_utc = pd.Timestamp(start_local).tz_convert("UTC")
     else:
@@ -338,27 +364,26 @@ def get_forecast(
     # Filter Forecast auf Zeitfenster
     s_fore = s_fore.loc[(s_fore.index >= start_utc) & (s_fore.index <= end_utc)] if not s_fore.empty else s_fore
 
-    # Marktdaten laden
+    # Marktdaten schneiden/aufbereiten
     # - Für die Antwort nur schneiden, wenn market=true
-    # - Für previous_forecast-Filter den global letzten Marktzeitpunkt verwenden (unabhängig vom Window)
-    s_price_all = pd.Series(dtype=float)
+    # - Für previous_forecast-Filter wurde der globale letzte Marktzeitpunkt bereits oben ermittelt
     s_price_window = pd.Series(dtype=float)
     if has_market:
         try:
-            s_price_all = csv_model._read_series(price_path)  # type: ignore[attr-defined]
-            if market:
+            # s_price_all wurde weiter oben bereits (falls möglich) geladen
+            if s_price_all.empty:
+                s_price_all = csv_model._read_series(price_path)  # type: ignore[attr-defined]
+            if market and not s_price_all.empty:
                 s_price_window = s_price_all.loc[(s_price_all.index >= start_utc) & (s_price_all.index <= end_utc)]
         except Exception as e:
             # Marktdaten sind optional – Fehler nicht fatal, aber melden
-            fetcher.job_log(f"⚠️ Fehler beim Lesen der Markt-CSV: {e}")
-            s_price_all = pd.Series(dtype=float)
+            fetcher.job_log(f"⚠️ Fehler beim Lesen/Schneiden der Markt-CSV: {e}")
             s_price_window = pd.Series(dtype=float)
 
     # Optional: Forecasts vor letztem (globalen) Marktzeitpunkt ausblenden
     if not previous_forecast and not s_fore.empty:
         if not s_price_all.empty:
-            last_market_ts = s_price_all.index.max()
-            if pd.notna(last_market_ts):
+            if last_market_ts is not None and pd.notna(last_market_ts):
                 s_fore = s_fore.loc[s_fore.index > last_market_ts]
 
     # Antwortdaten bauen (Intervall-basierte Ausgabe in lokaler Zeit)
