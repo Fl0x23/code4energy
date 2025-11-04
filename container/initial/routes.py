@@ -6,7 +6,12 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from core import APP_INFO
-from services import compute_trend_stats, compute_deviation_stats, build_forecast_items
+from services import (
+    compute_trend_stats,
+    compute_deviation_stats,
+    build_forecast_items,
+    get_price_forecast_last_modified,
+)
 
 router = APIRouter()
 
@@ -87,4 +92,10 @@ def get_forecast(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Erstellen der Forecast-Daten: {e}")
 
-    return JSONResponse(content=items)
+    # Meta: Letzte Änderung der Forecast-CSV als Header (UTC, ISO)
+    headers: dict[str, str] = {}
+    ts_iso = get_price_forecast_last_modified()
+    if ts_iso:
+        headers["X-Price-Forecast-Last-Modified"] = ts_iso
+
+    return JSONResponse(content=items, headers=headers)

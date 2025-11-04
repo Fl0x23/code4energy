@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Optional, List, Dict, Any
+from pathlib import Path
+import datetime
 import os
 import datetime
 
@@ -252,3 +254,20 @@ def build_forecast_items(
     # nach Startzeit sortieren
     items.sort(key=lambda x: x["start"])
     return items
+
+
+def get_price_forecast_last_modified(path: str = "/data/price_forecast.csv") -> Optional[str]:
+    """Ermittelt die letzte Änderung der Forecast-CSV als ISO-8601 (UTC).
+
+    Gibt einen ISO-String mit Zeitzone (UTC) zurück oder None, wenn die Datei
+    nicht existiert oder ein Fehler auftritt.
+    """
+    try:
+        p = Path(path)
+        if not p.exists():
+            return None
+        mtime = p.stat().st_mtime
+        ts_utc = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc)
+        return ts_utc.isoformat()
+    except Exception:
+        return None
