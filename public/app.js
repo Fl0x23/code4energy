@@ -37,6 +37,16 @@ async function loadData(container) {
 }
 
 
+// Zeige Ladeanimation in den Metrikfeldern
+function showMetricsLoading() {
+  const deviationEl = document.getElementById('deviationValue');
+  const trendEl = document.getElementById('trendValue');
+  const spinner = '<span class="spinner" aria-label="Lädt" role="status"></span>';
+  if (deviationEl) deviationEl.innerHTML = spinner;
+  if (trendEl) trendEl.innerHTML = spinner;
+}
+
+
 // Metriken anhand der aktuell gewählten Version berechnen
 async function computeAndRenderMetrics(container) {
   const deviationEl = document.getElementById('deviationValue');
@@ -243,6 +253,8 @@ function createChart(ctx, marketPoints, forecastPoints) {
   }
 
   try {
+  // Vor dem ersten Laden: Ladeanimation für Metriken zeigen
+  showMetricsLoading();
   await loadAndRender(initial);
   await computeAndRenderMetrics(initial);
     setInterval(() => chart && chart.update('none'), 60000);
@@ -255,6 +267,8 @@ function createChart(ctx, marketPoints, forecastPoints) {
     localStorage.setItem('c4e_container', container);
     updateApiLink(container);
     try {
+      // Beim Wechsel sofort Ladeanimation für Metriken anzeigen
+      showMetricsLoading();
       await loadAndRender(container);
       // Metriken passend zur gewählten Version berechnen
       await computeAndRenderMetrics(container);
